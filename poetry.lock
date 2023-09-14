@@ -1,0 +1,41 @@
+[[package]]
+name = "base58"
+version = "2.1.1"
+description = "Base58 and Base58Check implementation."
+category = "main"
+optional = false
+python-versions = ">=3.5"
+
+[package.extras]
+tests = ["PyHamcrest (>=2.0.2)", "mypy", "pytest (>=4.6)", "pytest-benchmark", "pytest-cov", "pytest-flake8"]
+
+[[package]]
+name = "fastecdsa"
+version = "2.3.0"
+description = "Fast elliptic curve digital signatures"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.10"
+content-hash = "780929b0985dd560bc7a5d7a7c82162b039ca3364361355052a07004b0e6d797"
+
+[metadata.files]
+base58 = [
+    {file = "base58-2.1.1-py3-none-any.whl", hash = "sha256:11a36f4d3ce51dfc1043f3218591ac4eb1ceb172919cebe05b52a5bcc8d245c2"},
+    {file = "base58-2.1.1.tar.gz", hash = "sha256:c5d0cb3f5b6e81e8e35da5754388ddcc6d0d14b6c6a132cb93d69ed580a7278c"},
+]
+fastecdsa = [
+    {file = "fastecdsa-2.3.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:0147804e6bf4915e83064f17a4bcc518d986dab87cba3609409e9f56b8d56772"},
+    {file = "fastecdsa-2.3.0-cp310-cp310-win_amd64.whl", hash = "sha256:c72f8f13160798b431c8a772e4e4bce39adf6faeea80fbf75f88010d0b304aa1"},
+    {file = "fastecdsa-2.3.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:b943a1ad3e1e306f0df422b198f544d029a70f19581e5b56a36ddfbe6302a33d"},
+    {file = "fastecdsa-2.3.0-cp37-cp37m-macosx_12_0_arm64.whl", hash = "sha256:82985e09b299ba400f1a21f2872dcc8e659bc127286f026d01b3540853298f9c"},
+    {file = "fastecdsa-2.3.0-cp37-cp37m-win_amd64.whl", hash = "sha256:8011db68e65b747b11ffa9575dc5bc6ad6d02aa971054e952e261694f705845a"},
+    {file = "fastecdsa-2.3.0-cp38-cp38-macosx_12_0_arm64.whl", hash = "sha256:fd61e461389a4fc1e965a1bbd5efb77588a0ebae2328aecdf011a5e9d439ce66"},
+    {file = "fastecdsa-2.3.0-cp38-cp38-win_amd64.whl", hash = "sha256:b0a4637e99cc22b5107d32ae001c2e36a5821c7a50ac001b806d64c157bf62c0"},
+    {file = "fastecdsa-2.3.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:7b91663b36137454299d7487a7a1b4a345120bd098ab5f7d7b0a02b50d6c9706"},
+    {file = "fastecdsa-2.3.0-cp39-cp39-win_amd64.whl", hash = "sha256:e45be9bcd063362576f93b344e032c743572c2a9ca7426eea3e4035ba21b1654"},
+    {file = "fastecdsa-2.3.0.tar.gz", hash = "sha256:6c59aba650862a59f601ff7f66cd6712f4798ae68907c953d58417a5887103de"},
+]
