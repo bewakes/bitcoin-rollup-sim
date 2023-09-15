@@ -6,7 +6,7 @@ import random
 from dataclasses import dataclass
 
 from .transaction import Transaction, VIn, VOut
-from .utils import get_merkle_root, get_nonce_for
+from .utils.block import get_merkle_root, get_nonce_for
 from .keys import KeysAddress
 
 

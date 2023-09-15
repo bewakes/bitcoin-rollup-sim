@@ -1,20 +1,8 @@
 from typing import List, Optional
 import hashlib
 
-from .transaction import Transaction
-
-
-def chunk_list(lst: List, size: int):
-    chunks = []
-    tmp = []
-    for i, x in enumerate(lst):
-        tmp.append(x)
-        if (i+1) % size == 0:
-            chunks.append(tmp)
-            tmp = []
-    if tmp:
-        chunks.append(tmp)
-    return chunks
+from bitcoin_rollup_sim.transaction import Transaction
+from bitcoin_rollup_sim.utils.common import chunk_list
 
 
 def get_merkle_root(txs: List[Transaction]):
