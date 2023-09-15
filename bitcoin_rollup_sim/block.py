@@ -1,4 +1,5 @@
 from typing import List
+import json
 import time
 import hashlib
 import random
@@ -11,8 +12,8 @@ from .keys import KeysAddress
 
 Random = random.Random(55)  # PRNG for creating initial coinbase p2pk address
 
-INITIAL_DIFFICULTY = 20**10
-INITIAL_TIMESTAMP = 1694692867
+INITIAL_DIFFICULTY = 2**236
+INITIAL_TIMESTAMP = 1694692863
 
 
 @dataclass
@@ -24,15 +25,38 @@ class BlockHeader:
     difficulty_target: float  # 4 bytes in real
     nonce: int  # 4 bytes in real
 
-    def __str__(self):
-        return "".join([
-            str(self.version),
-            str(self.prev_block_hash),
-            str(self.merkle_root),
-            str(self.timestamp),
-            str(self.difficulty_target),
-            str(self.nonce),
+    def serialize_without_nonce(self):
+        """Return formatted string to insert nonce"""
+        return json.dumps([
+            self.version,
+            self.prev_block_hash,
+            self.merkle_root,
+            self.timestamp,
+            self.difficulty_target,
+            "{}",
         ])
+
+    def serialize(self):
+        return json.dumps([
+            self.version,
+            self.prev_block_hash,
+            self.merkle_root,
+            self.timestamp,
+            self.difficulty_target,
+            self.nonce,
+        ])
+
+    @classmethod
+    def deserialize(cls, data: str):
+        [v, p, m, t, d, n] = json.loads(data)
+        return cls(
+            version=int(v),
+            prev_block_hash=p,
+            merkle_root=m,
+            timestamp=int(t),
+            difficulty_target=int(d),
+            nonce=int(n),
+        )
 
 
 @dataclass
@@ -45,8 +69,26 @@ class Block:
     def get_hash(self) -> str:
         return ""  # TODO
 
+    def serialize(self):
+        return json.dumps([
+            self.block_header.serialize(),
+            self.num_transactions,
+            [x.serialize() for x in self.transactions],
+            self.block_size,
+        ])
+
     @classmethod
-    def new(
+    def deserialize(cls, data: str):
+        [bh, nt, t, bs] = json.loads(data)
+        return cls(
+            block_header=BlockHeader.deserialize(bh),
+            num_transactions=nt,
+            transactions=[Transaction.deserialize(x) for x in t],
+            block_size=bs,
+        )
+
+    @classmethod
+    def mine(
         cls,
         prev_block_hash: str,
         transactions: List[Transaction],
@@ -56,6 +98,7 @@ class Block:
         difficulty_target = INITIAL_DIFFICULTY  # TODO: calculate new
         while True:
             timestamp = int(time.time())
+            timestamp = INITIAL_TIMESTAMP
             header = BlockHeader(
                 version=version,
                 prev_block_hash=prev_block_hash,
@@ -64,25 +107,21 @@ class Block:
                 difficulty_target=difficulty_target,
                 nonce=0,  # this will be changed below
             )
-            header_str = "".join([
-                str(version),
-                prev_block_hash,
-                merkle_root,
-                str(timestamp),
-                str(difficulty_target),
-            ])
-            nonce = get_nonce_for(header_str)
+            header_formatted = header.serialize_without_nonce()
+            nonce = get_nonce_for(header_formatted, difficulty_target)
             if nonce is not None:
                 header.nonce = nonce
                 break
 
-        block_size = len(str(header)) + sum([len(str(tx)) for tx in transactions])
-        return cls(
+        block = cls(
+            block_size=0,
             block_header=header,
             num_transactions=len(transactions),
-            block_size=block_size,
             transactions=transactions,
         )
+        block_size = len(block.serialize()) - 3  # noqa: Subtract 3 because block_size=0 present: [0, ...block after block_size field...]
+        block.block_size = block_size
+        return block
 
 
 # Genesis coinbase paid to this address
@@ -96,11 +135,19 @@ GenesisTransactions = [
     )
 ]
 
-# NOTE: this takes time to find nonce, since everything is fixed,
-# just hardcode the nonce value(TODO)
-print("CREATING genesis block")
-GenesisBlock = Block.new(
-    prev_block_hash=hashlib.sha256(b"").hexdigest(),
-    transactions=GenesisTransactions,
-)
-print("Genesis block created")
+
+def get_genesis_block() -> Block:
+    merkle_root = get_merkle_root(GenesisTransactions)
+    header = BlockHeader(
+        version=1,
+        prev_block_hash=hashlib.sha256(b"").hexdigest(),
+        merkle_root=merkle_root,
+        timestamp=INITIAL_TIMESTAMP,
+        difficulty_target=INITIAL_DIFFICULTY,
+        nonce=350254,  # noqa: nonce for genesis header, precalculated for above txns, time and so on
+    )
+    return Block(
+        block_header=header,
+        num_transactions=len(GenesisTransactions),
+        transactions=GenesisTransactions,
+    )

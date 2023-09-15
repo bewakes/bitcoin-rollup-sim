@@ -1,4 +1,5 @@
 from typing import List
+import json
 from enum import Enum
 import hashlib
 from dataclasses import dataclass
@@ -30,14 +31,26 @@ class VIn:
             sequence=sequence,
         )
 
-    def __str__(self):
-        return " ".join([
+    def serialize(self) -> str:
+        listed = [
             self.transaction_id,
-            str(self.vout),
+            self.vout,
             self.script_sig,
-            str(self.sequence),
+            self.sequence,
             self.coinbase,
-        ])
+        ]
+        return json.dumps(listed)
+
+    @classmethod
+    def deserialize(cls, data: str):
+        listed = json.loads(data)
+        return cls(
+            transaction_id=listed[0],
+            vout=int(listed[1]),
+            script_sig=listed[2],
+            sequence=int(listed[3]),
+            coinbase=listed[4],
+        )
 
 
 @dataclass
@@ -59,11 +72,19 @@ class VOut:
             script_pub_key=locking_script,
         )
 
-    def __str__(self):
-        return " ".join([
-            str(self.value),
+    def serialize(self):
+        return json.dumps([
+            self.value,
             self.script_pub_key,
         ])
+
+    @classmethod
+    def deserialize(cls, data: str):
+        listed = json.loads(data)
+        return cls(
+            value=int(listed[0]),
+            script_pub_key=listed[1],
+        )
 
 
 @dataclass
@@ -77,31 +98,33 @@ class Transaction:
     @classmethod
     def new(cls, vin: List[VIn], vout: List[VOut], version=1, locktime=0):
         # Create hash
-        vinstr = ", ".join([str(x) for x in vin])
-        voutstr = ", ".join([str(x) for x in vout])
         instance = cls(
             version=version,
             locktime=locktime,
             vin=vin,
             vout=vout,
         )
-        selfstr = "<>".join([
-            str(instance.version),
-            str(instance.locktime),
-            vinstr,
-            voutstr
-        ])
+        selfstr = instance.serialize()
         selfid = hashlib.sha256(selfstr.encode('utf8')).hexdigest()
         instance.txid = selfid
         return instance
 
-    def __str__(self):
-        vinstr = ", ".join([str(x) for x in self.vin])
-        voutstr = ", ".join([str(x) for x in self.vout])
-        return "".join([
-            str(self.version),
-            str(self.locktime),
-            vinstr,
-            voutstr,
+    def serialize(self):
+        return json.dumps([
             self.txid,
+            self.version,
+            self.locktime,
+            [x.serialize() for x in self.vin],
+            [x.serialize() for x in self.vout],
         ])
+
+    @classmethod
+    def deserialize(cls, data: str):
+        [txid, ver, lck, vins, vouts] = json.loads(data)
+        return cls(
+            txid=txid,
+            version=int(ver),
+            locktime=int(lck),
+            vin=[VIn.deserialize(x) for x in vins],
+            vout=[VOut.deserialize(x) for x in vouts],
+        )

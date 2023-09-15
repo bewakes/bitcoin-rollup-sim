@@ -1,7 +1,7 @@
 from typing import List, Optional
 import hashlib
 
-from .transactions import Transaction
+from .transaction import Transaction
 
 
 def chunk_list(lst: List, size: int):
@@ -34,20 +34,25 @@ def create_merkle_root(items: List[str]) -> str:
         items.append(items[-1])
 
     pairs = chunk_list(items, 2)
-    pair_hashes = [hashlib.sha256(x+y).hexdigest() for x, y in pairs]
+    pair_hashes = [
+        hashlib.sha256((x+y).encode('utf-8')).hexdigest()
+        for x, y in pairs
+    ]
     return create_merkle_root(pair_hashes)
 
 
 def get_nonce_for(inp: str, difficulty: int) -> Optional[int]:
     """
+    inp: formatted str. use inp.format(nonce)
     NOTE: unlike in real(bitcion), here the difficulty keeps decreasing.
     We need to find nonce which makes the hash greater than the
     difficulty(unlike smaller in bitcion).
     """
     for x in range(0, 10**6):
-        to_hash = inp + str(x)
+        to_hash = inp.format(x)
         sha = hashlib.sha256(to_hash.encode('utf8')).hexdigest()
         shaval = int(sha, 16)
-        if shaval > difficulty:
+        print(x, "is proof of work?", shaval < difficulty)
+        if shaval < difficulty:
             return x
     return None
