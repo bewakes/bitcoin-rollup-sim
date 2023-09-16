@@ -130,8 +130,8 @@ GenesisKeyAddress = KeysAddress.from_priv_key(Random.randrange(0, 2 << 256))
 # Only on transaction
 GenesisTransactions = [
     Transaction.new(
-        vin=[VIn.get_coinbase_input("Learning bitcion", 1)],
-        vout=[VOut.get_for_p2pk(GenesisKeyAddress.address, 50)],
+        vin=[VIn.get_coinbase_input("Learning bitcoin", 1)],
+        vout=[VOut.get_for_p2pkh(GenesisKeyAddress.pub_key, 50)],
     )
 ]
 

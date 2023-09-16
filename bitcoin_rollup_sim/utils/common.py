@@ -39,7 +39,7 @@ def pubkey_compressed_to_point(pubkey_compressed: int):
     Ysq = c.evaluate(X)
     order = c.p
     y = pow(Ysq, (order + 1) // 4, order)
-    if order - y > y:
+    if order - y < y:
         yeven = y
         yodd = order - y
     else:

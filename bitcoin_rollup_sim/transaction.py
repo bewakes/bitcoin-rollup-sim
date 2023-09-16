@@ -3,7 +3,7 @@ import json
 import hashlib
 from dataclasses import dataclass
 
-from .script import ScriptOps
+from .consts import ScriptOps
 from .utils.common import pubkey_compressed_hash160
 
 
@@ -56,23 +56,27 @@ class VOut:
     @classmethod
     def get_for_p2pkh(cls, pubkey: int, value: int):
         # Assume compressed pubkey
-        locking_script = " ".join([
-            ScriptOps.DUP,
-            ScriptOps.HASH160,
-            pubkey_compressed_hash160(pubkey).hex(),
-            ScriptOps.EQUALVERIFY,
-            ScriptOps.CHECKSIG,
-        ])
+        locking_script = " ".join(
+            [
+                ScriptOps.OP_DUP,
+                ScriptOps.OP_HASH160,
+                pubkey_compressed_hash160(pubkey).hex(),
+                ScriptOps.OP_EQUALVERIFY,
+                ScriptOps.OP_CHECKSIG,
+            ]
+        )
         return cls(
             value=value,
             script_pub_key=locking_script,
         )
 
     def serialize(self):
-        return json.dumps([
-            self.value,
-            self.script_pub_key,
-        ])
+        return json.dumps(
+            [
+                self.value,
+                self.script_pub_key,
+            ]
+        )
 
     @classmethod
     def deserialize(cls, data: str):
@@ -101,18 +105,20 @@ class Transaction:
             vout=vout,
         )
         selfstr = instance.serialize()
-        selfid = hashlib.sha256(selfstr.encode('utf8')).hexdigest()
+        selfid = hashlib.sha256(selfstr.encode("utf8")).hexdigest()
         instance.txid = selfid
         return instance
 
     def serialize(self):
-        return json.dumps([
-            self.txid,
-            self.version,
-            self.locktime,
-            [x.serialize() for x in self.vin],
-            [x.serialize() for x in self.vout],
-        ])
+        return json.dumps(
+            [
+                self.txid,
+                self.version,
+                self.locktime,
+                [x.serialize() for x in self.vin],
+                [x.serialize() for x in self.vout],
+            ]
+        )
 
     @classmethod
     def deserialize(cls, data: str):

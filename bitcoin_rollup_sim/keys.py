@@ -33,10 +33,15 @@ class KeysAddress:
             digest = ripemd.digest()
         else:
             order = curve.P256.p
-            is_even = order - pub_key_.y > pub_key_.y
+            # TODO: I don't know if the following is the proper way to decide odd or even
+            is_even = (order - pub_key_.y) < pub_key_.y
             prefix = (0x02 if is_even else 0x03) << 256
             pub_key = prefix | pub_key_.x
             digest = pubkey_compressed_hash160(pub_key)
 
-        addr = base58.b58encode(bytes([0x00, *digest]))  # Add version prefix
+        prefixed = bytes([0x00, *digest])  # Add version prefix
+        checksum = hashlib.sha256(hashlib.sha256(prefixed).digest()).digest()
+        checksum_4bytes = checksum[:4]
+        checksumed = [*prefixed, *checksum_4bytes]
+        addr = base58.b58encode(bytes(checksumed))
         return cls(priv_key, pub_key, addr.decode("utf-8"))

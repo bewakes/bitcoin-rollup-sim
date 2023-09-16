@@ -1,0 +1,19 @@
+class ScriptOps:
+    OP_EQUAL = "OP_EQUAL"
+    OP_EQUALVERIFY = "OP_EQUALVERIFY"
+    OP_DUP = "OP_DUP"
+    OP_HASH160 = "OP_HASH160"
+    OP_CHECKSIG = "OP_CHECKSIG"
+    OP_CHECKSIGVERIFY = "OP_CHECKSIGVERIFY"
+    OP_RETURN = "OP_RETURN"
+
+
+OPCODES = {
+    ScriptOps.OP_EQUAL,
+    ScriptOps.OP_EQUALVERIFY,
+    ScriptOps.OP_DUP,
+    ScriptOps.OP_HASH160,
+    ScriptOps.OP_CHECKSIG,
+    ScriptOps.OP_CHECKSIGVERIFY,
+    ScriptOps.OP_RETURN,
+}

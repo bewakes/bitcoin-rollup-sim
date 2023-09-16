@@ -1,28 +1,13 @@
-from fastecdsa import ecdsa, curve, point
+import hashlib
+from fastecdsa import ecdsa, curve
 
 from .utils.common import pubkey_compressed_hash160, pubkey_compressed_to_point
 from .transaction import VOut
+from .consts import OPCODES
 
+import logging
 
-class ScriptOps:
-    OP_EQUAL = "OP_EQUAL"
-    OP_EQUALVERIFY = "OP_EQUALVERIFY"
-    OP_DUP = "OP_DUP"
-    OP_HASH160 = "OP_HASH160"
-    OP_CHECKSIG = "OP_CHECKSIG"
-    OP_CHECKSIGVERIFY = "OP_CHECKSIGVERIFY"
-    OP_RETURN = "OP_RETURN"
-
-
-OPCODES = {
-    ScriptOps.OP_EQUAL,
-    ScriptOps.OP_EQUALVERIFY,
-    ScriptOps.OP_DUP,
-    ScriptOps.OP_HASH160,
-    ScriptOps.OP_CHECKSIG,
-    ScriptOps.OP_CHECKSIGVERIFY,
-    ScriptOps.OP_RETURN,
-}
+logger = logging.getLogger("script")
 
 
 class Actions:
@@ -66,7 +51,8 @@ class Actions:
         r, s = int(rhex, 16), int(shex, 16)
 
         msg = vout_txn.serialize()
-        return ecdsa.verify((r, s), msg, Q, curve.secp256k1), stack
+        msgdigest = hashlib.sha256(msg.encode("utf-8")).digest()
+        return ecdsa.verify((r, s), msgdigest, Q, curve.secp256k1), stack
 
     @staticmethod
     def op_checksig_action(stack: list, vout_txn: VOut) -> list:
@@ -95,7 +81,8 @@ def run_stack(script: list[str], vout: VOut) -> list:
             action_name = item.lower() + "_action"
             try:
                 action = getattr(Actions, action_name)
-                stack = action(stack, vout)
-            except Exception:
+                stack = action(stack, vout)  # Add other context as needed
+            except Exception as e:
+                logger.warning("Could not execute action", exc_info=True)
                 return [0]
     return stack
