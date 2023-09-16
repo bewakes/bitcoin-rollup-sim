@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-
 from fastecdsa import curve, keys
 import base58
 import hashlib
+
+from .utils.common import pubkey_compressed_hash160
 
 
 @dataclass
@@ -23,23 +24,19 @@ class KeysAddress:
     def from_priv_key(cls, priv_key: int, compress_key=True):
         pub_key_ = keys.get_public_key(priv_key, curve.secp256k1)
         if not compress_key:
-            prefix = 0x04 << 512
-            with_x = prefix | pub_key_.x << 256
-            pub_key = with_x | pub_key_.y
+            prefix = 0x04 << 256
+            with_x = prefix | pub_key_.x
+            pub_key = with_x << 256 | pub_key_.y
             addr_sha = hashlib.sha256(pub_key.to_bytes(65, 'little'))
+            ripemd = hashlib.new("ripemd160")
+            ripemd.update(addr_sha.digest())
+            digest = ripemd.digest()
         else:
             order = curve.P256.p
-            is_even = order - pub_key_.x > pub_key_.x
+            is_even = order - pub_key_.y > pub_key_.y
             prefix = (0x02 if is_even else 0x03) << 256
             pub_key = prefix | pub_key_.x
-            addr_sha = hashlib.sha256(pub_key.to_bytes(33, 'little'))
+            digest = pubkey_compressed_hash160(pub_key)
 
-        ripemd = hashlib.new("ripemd160")
-        ripemd.update(addr_sha.digest())
-        digest = ripemd.digest()
         addr = base58.b58encode(bytes([0x00, *digest]))  # Add version prefix
         return cls(priv_key, pub_key, addr.decode("utf-8"))
-
-
-if __name__ == '__main__':
-    print(KeysAddress.new())

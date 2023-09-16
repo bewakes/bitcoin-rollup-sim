@@ -1,15 +1,10 @@
 from typing import List
 import json
-from enum import Enum
 import hashlib
 from dataclasses import dataclass
 
-
-class ScriptOps(Enum):
-    CHECKSIG = "CHECKSIG"
-    EQUALVERIFY = "EQUALVERIFY"
-    DUP = "DUP"
-    HASH160 = "HASH160"
+from .script import ScriptOps
+from .utils.common import pubkey_compressed_hash160
 
 
 @dataclass
@@ -59,13 +54,14 @@ class VOut:
     script_pub_key: str
 
     @classmethod
-    def get_for_p2pk(cls, address: str, value: int):
+    def get_for_p2pkh(cls, pubkey: int, value: int):
+        # Assume compressed pubkey
         locking_script = " ".join([
-            ScriptOps.DUP.name,
-            ScriptOps.HASH160.name,
-            address,  # TODO: hash?
-            ScriptOps.EQUALVERIFY.name,
-            ScriptOps.CHECKSIG.name,
+            ScriptOps.DUP,
+            ScriptOps.HASH160,
+            pubkey_compressed_hash160(pubkey).hex(),
+            ScriptOps.EQUALVERIFY,
+            ScriptOps.CHECKSIG,
         ])
         return cls(
             value=value,

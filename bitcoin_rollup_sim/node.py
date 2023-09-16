@@ -1,12 +1,11 @@
 import random
-import hashlib
 from dataclasses import dataclass
-from fastecdsa import ecdsa, curve
 
 from .transaction import Transaction, VIn, VOut
 from .peers import send_transaction
 from .validation import validate_transaction
 from .utils.node import get_inputs_for
+from .utils.common import get_signature
 
 # NodeRole: TypeAlias = Literal["miner", "wallet", "fullnode", "spvnode"]
 
@@ -21,6 +20,13 @@ class Node:
 
     def __init__(self):
         self.nid = f"{self.type}-{random.randrange(10000)}"
+        # Connect peers
+
+    def send_get_peers_msg(self):
+        ...
+
+    def receive_get_peers_response(self):
+        ...
 
     def propagate_transaction(self, transaction: Transaction):
         self.propagated_txns.append(transaction.txid)
@@ -59,11 +65,7 @@ class WalletNode(Node):
         # TODO: I am not exacly sure what to sign. So I'll just sign
         # the serialized vout indicated by vout_ind
         vout = txn.vout[vout_ind]
-        vout_ser = vout.serialize()
-        hashed = hashlib.sha256(vout_ser.encode("utf-8")).digest()
-        r, s = ecdsa.sign(hashed, self.priv_key, curve.secp256k1)
-        # NOTE: In real, DER encoding is done, but I simplify here as below
-        return f"{r}:{s}"
+        return get_signature(vout.serialize(), self.priv_key)
 
     def pay_to(self, amt_sats: int, addr: str):
         inps = get_inputs_for(self.pub_key, amt_sats)
@@ -90,7 +92,7 @@ class WalletNode(Node):
             VOut.get_for_p2pk(addr, amt_sats),
         ]
         if surplus:  # pay back to yourself
-            vouts.append(VOut.get_for_p2pk(self.address, surplus))
+            vouts.append(VOut.get_for_p2pk(self.pub_key, surplus))
 
         txn = Transaction.new(vins, vouts)
 
