@@ -1,15 +1,16 @@
 import random
 import time
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .transaction import Transaction, VIn, VOut
 from .peers import send_transaction, send_block
 from .block import Block
+from .keys import KeysAddress
 from .validation import validate_new_transaction
 from .utils.node import get_inputs_for
 from .utils.common import get_signature, pubkey_compressed_hash160
-from .global_state import get_blockchain
+from .runnable import Runnable
 
 
 MIN_TXNS_PER_BLOCK = 3
@@ -20,20 +21,29 @@ MIN_TIME_SINCE_LAST_BLOCK = 30  # Seconds
 
 
 @dataclass
-class Node:
+class Node(Runnable):
     nid: str
-    peers: list[str] = []
-    propagated_txns: list[str] = []  # propagated txn ids
-    propagated_blocks: list[str] = []  # propagated block hashes
-    mem_pool: list[Transaction] = []  # Pool of unconfirmed txns
-    utxo_set: set[str] = set()  # Set of UTXOs
+    peers: list[str] = field(default_factory=list)
+    propagated_txns: list[str] = field(default_factory=list)  # propagated txn ids
+    propagated_blocks: list[str] = field(default_factory=list)  # propagated block hashes
+    mem_pool: list[Transaction] = field(default_factory=list)  # Pool of unconfirmed txns
+    utxo_set: set[str] = field(default_factory=set)  # Set of UTXOs
     type = "node"
 
     def __init__(self):
+        super().__init__()
         self.nid = f"{self.type}-{random.randrange(10000)}"
         self.logger = logging.getLogger(self.nid)
         # Connect peers
         self.discover_peers()
+
+    def log(self, *args, **kwargs):
+        print(*args, **kwargs)
+        self.logger.info(*args, **kwargs)
+
+    def on_receive_message(self, message: str):
+        msg_type, data = message.split()
+        print(f"Message type {msg_type} received with data {message}")
 
     def discover_peers(self):
         pass
@@ -80,18 +90,26 @@ class WalletNode(Node):
     """
     For simplicity wallet node handles just a single address
     """
-    priv_key: int
-    pub_key: int
-    address: str
+    keysaddress: KeysAddress
     type = "wallet"
 
-    def create_signature(self, txn: Transaction, vout_ind: int) -> str:
-        # TODO: I am not exacly sure what to sign. So I'll just sign
+    def __init__(self):
+        super().__init__()
+        self.keysaddress = KeysAddress.new()
+        print(self.nid, self.port, self.pubkeyhash())
+
+    def pubkeyhash(self):
+        return pubkey_compressed_hash160(
+            self.keysaddress.pub_key
+        ).hex()
+
+    def create_signature(self, utxn: Transaction, vout_ind: int) -> str:
+        # TODO: I am not entirely sure what to sign. So I'll just sign
         # the serialized vout indicated by vout_ind
-        vout = txn.vout[vout_ind]
+        vout = utxn.vout[vout_ind]
         return get_signature(vout.serialize(), self.priv_key)
 
-    def pay_to(self, amt_sats: int, pkeyhash: str):
+    def pay_to(self, pkeyhash: str, amt_sats: int):
         inps = get_inputs_for(self.pub_key, amt_sats)
         if not inps:
             print(f"{self.nid} - Insufficient Funds({amt_sats} sats)!")
@@ -116,10 +134,11 @@ class WalletNode(Node):
             VOut.get_for_p2pkh(pkeyhash, amt_sats),
         ]
         if surplus:  # pay back to yourself
-            my_keyhash = pubkey_compressed_hash160(self.pub_key).hex()
+            my_keyhash = self.pubkeyhash()
             vouts.append(VOut.get_for_p2pkh(my_keyhash, surplus))
 
         txn = Transaction.new(vins, vouts)
+        self.logger.info(f"Created a new transaction paying {amt_sats} Satoshis to {pkeyhash}")  # noqa
 
         # Add to txn pool
         self.mem_pool.append(txn)
@@ -127,9 +146,21 @@ class WalletNode(Node):
         # And then propagate
         self.propagate_transaction(txn)
 
+    def run(self, peers):
+        # Listen for payment requests
+        self.socket.listen(10)   # 10 connections max
+        while True:
+            conn, addr = self.socket.accept()
+            self.log(f"Received connection from {addr}")
+            data = conn.recv(100).decode()
+            send_addr, amount = data.strip().split()
+            self.log(f"sending {amount} to {send_addr}")
+            self.pay_to(send_addr, int(amount))
+
 
 class MinerNode(Node):
     def mine(self):
+        from .global_state import get_blockchain
         blockchain = get_blockchain()
         last_block = blockchain[-1]
         last_block_header = last_block.block_header
@@ -137,6 +168,9 @@ class MinerNode(Node):
 
         # Return if not enough items in mempool and min time before mining
         # has not elapsed
+        if len(self.mem_pool) == 0:
+            self.logger.info("Empty mempool")
+            return
         if (
             len(self.mem_pool) < MIN_TXNS_PER_BLOCK
             and time_since_last_block < MIN_TIME_SINCE_LAST_BLOCK

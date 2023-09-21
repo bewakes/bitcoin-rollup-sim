@@ -5,7 +5,8 @@ from bitcoin_rollup_sim.global_state import get_utxos
 
 
 def check_can_spend(utxo: Transaction, pub_key: int) -> int | None:
-    ...
+    raise Exception("Not implemented")
+    return True
 
 
 VoutInd: TypeAlias = int
@@ -19,7 +20,7 @@ def get_inputs_for(
     """
     This scans unspent txns that can be spent by pub_key
     """
-    utxos: list[Transaction] = get_utxos()
+    utxos = get_utxos()
     sum_amt = 0
     items: List[Tuple[Transaction, VoutInd, Amt]] = []
     for utxo in utxos:

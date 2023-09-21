@@ -4,7 +4,7 @@ Since this is a simlulation app, the global state of the blockchain is maintaine
 
 from typing import Tuple, List
 
-from .node import Node
+# from .node import Node
 from .block import get_genesis_block, Block
 from .transaction import VOut
 
@@ -24,7 +24,7 @@ class GlobalState:
 GLOBAL_STATE = GlobalState()
 
 
-def get_node(nid: str) -> Node | None:
+def get_node(nid: str):
     return GLOBAL_STATE.__nodes.get(nid)
 
 
