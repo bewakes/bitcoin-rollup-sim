@@ -54,13 +54,12 @@ class VOut:
     script_pub_key: str
 
     @classmethod
-    def get_for_p2pkh(cls, pubkey: int, value: int):
-        # Assume compressed pubkey
+    def get_for_p2pkh(cls, pkeyhash: str, value: int):
         locking_script = " ".join(
             [
                 ScriptOps.OP_DUP,
                 ScriptOps.OP_HASH160,
-                pubkey_compressed_hash160(pubkey).hex(),
+                pkeyhash,
                 ScriptOps.OP_EQUALVERIFY,
                 ScriptOps.OP_CHECKSIG,
             ]

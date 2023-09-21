@@ -2,23 +2,35 @@
 Since this is a simlulation app, the global state of the blockchain is maintained here
 """
 
-from .node import Node
-from .block import get_genesis_block
+from typing import Tuple, List
 
-GLOBAL_STATE = {
-    "nodes": dict(),
-    "blockchain": [get_genesis_block()],
-    "utxos": [],
-}
+from .node import Node
+from .block import get_genesis_block, Block
+from .transaction import VOut
+
+
+GenesisBlock = get_genesis_block()
+
+
+class GlobalState:
+    __nodes: dict = {}
+    __blockchain: list[Block] = [GenesisBlock]
+    __utxos: list[Tuple[str, List[VOut]]] = [
+        (x.txid, x.vout)
+        for x in GenesisBlock.transactions
+    ]
+
+
+GLOBAL_STATE = GlobalState()
 
 
 def get_node(nid: str) -> Node | None:
-    return GLOBAL_STATE["nodes"].get(nid)
+    return GLOBAL_STATE.__nodes.get(nid)
 
 
 def get_blockchain():
-    return GLOBAL_STATE["blockchain"]
+    return GLOBAL_STATE.__blockchain
 
 
 def get_utxos():
-    return GLOBAL_STATE["utxos"]
+    return GLOBAL_STATE.__utxos

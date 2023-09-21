@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .transaction import Transaction, VIn, VOut
 from .utils.block import get_merkle_root, get_nonce_for
+from .utils.common import pubkey_compressed_hash160
 from .keys import KeysAddress
 
 
@@ -67,7 +68,7 @@ class Block:
     block_size: int = 0
 
     def get_hash(self) -> str:
-        return ""  # TODO
+        return hashlib.sha256(self.serialize().encode("utf-8")).hexdigest()
 
     def serialize(self):
         return json.dumps([
@@ -86,6 +87,35 @@ class Block:
             transactions=[Transaction.deserialize(x) for x in t],
             block_size=bs,
         )
+
+    @classmethod
+    def new(
+        cls,
+        prev_block_hash: str,
+        transactions: List[Transaction],
+        version=1,
+    ):
+        merkle_root = get_merkle_root(transactions)
+        difficulty_target = INITIAL_DIFFICULTY  # TODO: calculate new
+        timestamp = int(time.time())
+        header = BlockHeader(
+            version=version,
+            prev_block_hash=prev_block_hash,
+            merkle_root=merkle_root,
+            timestamp=timestamp,
+            difficulty_target=difficulty_target,
+            nonce=0,  # this should be changed
+        )
+
+        block = cls(
+            block_size=0,
+            block_header=header,
+            num_transactions=len(transactions),
+            transactions=transactions,
+        )
+        block_size = len(block.serialize()) - 3  # noqa: Subtract 3 because block_size=0 present: [0, ...block after block_size field...]
+        block.block_size = block_size
+        return block
 
     @classmethod
     def mine(
@@ -128,10 +158,11 @@ class Block:
 GenesisKeyAddress = KeysAddress.from_priv_key(Random.randrange(0, 2 << 256))
 
 # Only on transaction
+pubkeyhash = pubkey_compressed_hash160(GenesisKeyAddress.pub_key).hex()
 GenesisTransactions = [
     Transaction.new(
         vin=[VIn.get_coinbase_input("Learning bitcoin", 1)],
-        vout=[VOut.get_for_p2pkh(GenesisKeyAddress.pub_key, 50)],
+        vout=[VOut.get_for_p2pkh(pubkeyhash, 50)],
     )
 ]
 

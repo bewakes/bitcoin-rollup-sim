@@ -12,14 +12,14 @@ logger = logging.getLogger("script")
 
 class Actions:
     @staticmethod
-    def op_equal_action(stack: list, *args) -> list:
+    def op_equal_action(stack: list, *_) -> list:
         o1 = stack.pop()
         o2 = stack.pop()
         stack.append(o1 == o2)
         return stack
 
     @staticmethod
-    def op_equalverify_action(stack: list, *args) -> list:
+    def op_equalverify_action(stack: list, *_) -> list:
         o1 = stack.pop()
         o2 = stack.pop()
         if o1 != o2:
@@ -28,12 +28,12 @@ class Actions:
         return stack
 
     @staticmethod
-    def op_dup_action(stack: list, *args) -> list:
+    def op_dup_action(stack: list, *_) -> list:
         stack.append(stack[-1])
         return stack
 
     @staticmethod
-    def op_hash160_action(stack: list, *args) -> list:
+    def op_hash160_action(stack: list, *_) -> list:
         # Assume public key is compressed
         pubkeystr = stack.pop()  # hex str
         pubkey = int(pubkeystr, 16)
@@ -68,7 +68,7 @@ class Actions:
         return stack
 
     @staticmethod
-    def op_return_action(stack: list, *args) -> list:
+    def op_return_action(stack: list, *_) -> list:
         ...
 
 
@@ -82,7 +82,6 @@ def run_stack(script: list[str], vout: VOut) -> list:
             try:
                 action = getattr(Actions, action_name)
                 stack = action(stack, vout)  # Add other context as needed
-            except Exception as e:
-                logger.warning("Could not execute action", exc_info=True)
-                return [0]
+            except Exception:
+                return [False]
     return stack
