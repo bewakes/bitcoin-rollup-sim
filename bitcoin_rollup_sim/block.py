@@ -1,4 +1,5 @@
 from typing import List
+import functools
 import json
 import time
 import hashlib
@@ -6,14 +7,14 @@ import random
 from dataclasses import dataclass
 
 from .transaction import Transaction, VIn, VOut
-from .utils.block import get_merkle_root, get_nonce_for
+from .utils.block import get_merkle_root, get_nonce_for, calculate_new_difficulty
 from .utils.common import pubkey_compressed_hash160
 from .keys import KeysAddress
 
 
 Random = random.Random(55)  # PRNG for creating initial coinbase p2pk address
 
-INITIAL_DIFFICULTY = 2**236
+INITIAL_DIFFICULTY = 2**238
 INITIAL_TIMESTAMP = 1694692863
 
 
@@ -67,7 +68,8 @@ class Block:
     transactions: List[Transaction]
     block_size: int = 0
 
-    def get_hash(self) -> str:
+    @functools.cached_property
+    def hash(self) -> str:
         return hashlib.sha256(self.serialize().encode("utf-8")).hexdigest()
 
     def serialize(self):
@@ -122,13 +124,13 @@ class Block:
         cls,
         prev_block_hash: str,
         transactions: List[Transaction],
+        blocks: list,
         version=1,
     ):
         merkle_root = get_merkle_root(transactions)
-        difficulty_target = INITIAL_DIFFICULTY  # TODO: calculate new
+        difficulty_target = calculate_new_difficulty(blocks)
         while True:
             timestamp = int(time.time())
-            timestamp = INITIAL_TIMESTAMP
             header = BlockHeader(
                 version=version,
                 prev_block_hash=prev_block_hash,

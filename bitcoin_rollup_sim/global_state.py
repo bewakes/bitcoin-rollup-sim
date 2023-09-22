@@ -20,17 +20,14 @@ class GlobalState:
         for x in GenesisBlock.transactions
     ]
 
+    def get_utxos(self):
+        return self.__utxos
+
+    def get_node(self, nid: str):
+        return self.__nodes.get(nid)
+
+    def get_blockchain(self):
+        return self.__blockchain
+
 
 GLOBAL_STATE = GlobalState()
-
-
-def get_node(nid: str):
-    return GLOBAL_STATE.__nodes.get(nid)
-
-
-def get_blockchain():
-    return GLOBAL_STATE.__blockchain
-
-
-def get_utxos():
-    return GLOBAL_STATE.__utxos

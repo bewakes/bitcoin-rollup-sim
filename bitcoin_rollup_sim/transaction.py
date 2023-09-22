@@ -95,6 +95,13 @@ class Transaction:
     txid: str = ""
 
     @classmethod
+    def create_coinbase(cls, dest_pubkeyhash: str, coinbase_message: str):
+        return cls.new(
+            vin=[VIn.get_coinbase_input(coinbase_message, 1)],
+            vout=[VOut.get_for_p2pkh(dest_pubkeyhash, 50)],
+        )
+
+    @classmethod
     def new(cls, vin: List[VIn], vout: List[VOut], version=1, locktime=0):
         # Create hash
         instance = cls(

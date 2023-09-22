@@ -1,7 +1,5 @@
-from typing import Callable
 import random
 import socket
-import random
 
 
 # How many bytes to represent the size(stringified int) of the data
@@ -12,7 +10,7 @@ random.seed(400)
 
 
 class ConnectionMixin:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.socket = socket.socket()
         self.nid = "<unnamed node>"
         self.setup()
@@ -25,21 +23,22 @@ class ConnectionMixin:
                 self.port = port
                 return port
             except Exception:
-                self.logger.error(f"Binding to {port} failed. Trying another.")
+                print(f"Binding to {port} failed. Trying another.")
 
-    def on_receive_message(self):
-        print(*args, **kwargs)
+    def on_receive_message(self, _: str):
+        pass
 
-    def run(self, peers):
+    def run(self):
+        self.listen()
+
+    def listen(self):
         self.socket.listen(10)   # 10 connections max
         while True:
             conn, addr = self.socket.accept()
-            self.logger.info(f"Received connection from {addr}")
             # Read size of data in bytes
             # first N bytes denote stringified number of bytes
             size = int(conn.recv(DATA_LEN_NUM_BYTES))
             data = conn.recv(size).decode()
-            self.logger.info(f"Received {size} bytes of data: {data}")
             resp = self.on_receive_message(data)
             if resp is not None:
                 ln = str(len(resp)).zfill(DATA_LEN_NUM_BYTES)
@@ -51,3 +50,11 @@ class ConnectionMixin:
         ln = str(len(data)).zfill(DATA_LEN_NUM_BYTES)
         s.send(f"{ln}{data}".encode())
         self.logger.info(f"Sent data to {peer_id}({port})")
+
+    def send_block(self, port: int, serialized_block: str, peer_id: str):
+        msg = "newblock " + serialized_block
+        self.send(port, msg, peer_id)
+
+    def send_transaction(self, port: int, serialized_txn: str, peer_id: str):
+        msg = "newtxn " + serialized_txn
+        self.send(port, msg, peer_id)

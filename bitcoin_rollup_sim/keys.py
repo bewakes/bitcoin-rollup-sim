@@ -46,3 +46,11 @@ class KeysAddress:
         checksumed = [*prefixed, *checksum_4bytes]
         addr = base58.b58encode(bytes(checksumed))
         return cls(priv_key, pub_key, addr.decode("utf-8"))
+
+    @property
+    def pub_key_hex(self):
+        return hex(self.pub_key)[2:]
+
+    @property
+    def pub_key_hash(self):
+        return pubkey_compressed_hash160(self.pub_key).hex()

@@ -1,12 +1,19 @@
-from typing import List, Tuple, Literal, TypeAlias, Union
+from typing import List, Tuple, TypeAlias, Optional
 
-from bitcoin_rollup_sim.transaction import VIn, Transaction
-from bitcoin_rollup_sim.global_state import get_utxos
+from bitcoin_rollup_sim.transaction import Transaction, VOut
+from bitcoin_rollup_sim.global_state import GLOBAL_STATE
 
 
-def check_can_spend(utxo: Transaction, pub_key: int) -> int | None:
-    raise Exception("Not implemented")
-    return True
+def check_can_spend(
+    vouts: List[VOut],
+    pub_key_hash: str
+) -> Tuple[Optional[int], Optional[VOut]]:
+    for i, vout in enumerate(vouts):
+        [_, _, pubhash, *_] = vout.script_pub_key.split()
+        if pubhash == pub_key_hash:
+            return i, vout
+        vout.script_pub_key
+    return None, None
 
 
 VoutInd: TypeAlias = int
@@ -14,22 +21,22 @@ Amt: TypeAlias = int
 
 
 def get_inputs_for(
-    pub_key: int,
+    pub_key_hash: str,
     amt_sats: int
-) -> List[Tuple[Transaction, VoutInd, Amt]]:
+) -> List[Tuple[str, VoutInd, VOut]]:
     """
     This scans unspent txns that can be spent by pub_key
     """
-    utxos = get_utxos()
+    utxos = GLOBAL_STATE.get_utxos()
     sum_amt = 0
-    items: List[Tuple[Transaction, VoutInd, Amt]] = []
-    for utxo in utxos:
+    items: List[Tuple[str, VoutInd, VOut]] = []
+    for txid, vouts in utxos:
         # Check vout for each
-        vout_ind = check_can_spend(utxo, pub_key)
-        if vout_ind is not None:
-            val = utxo.vout[vout_ind].value
+        vout_ind, vout = check_can_spend(vouts, pub_key_hash)
+        if vout_ind is not None and vout is not None:
+            val = vout.value
             sum_amt += val
-            items.append((utxo, vout_ind, val))
+            items.append((txid, vout_ind, vout))
             if sum_amt >= amt_sats:
                 return items
     # If it reaches here, then the amount cannot be satisfied from pubkey

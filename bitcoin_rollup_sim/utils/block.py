@@ -40,7 +40,11 @@ def get_nonce_for(inp: str, difficulty: int) -> Optional[int]:
         to_hash = inp.format(x)
         sha = hashlib.sha256(to_hash.encode('utf8')).hexdigest()
         shaval = int(sha, 16)
-        print(x, "is proof of work?", shaval < difficulty)
         if shaval < difficulty:
             return x
     return None
+
+
+def calculate_new_difficulty(blocks: list):
+    # TODO: make actual calculation
+    return int(blocks[-1].block_header.difficulty_target/1.000002)
