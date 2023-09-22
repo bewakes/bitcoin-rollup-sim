@@ -33,7 +33,8 @@ class KeysAddress:
             digest = ripemd.digest()
         else:
             order = curve.P256.p
-            # TODO: I don't know if the following is the proper way to decide odd or even
+            # TODO: I don't know if the following is the proper
+            # way to decide odd or even
             is_even = (order - pub_key_.y) < pub_key_.y
             prefix = (0x02 if is_even else 0x03) << 256
             pub_key = prefix | pub_key_.x

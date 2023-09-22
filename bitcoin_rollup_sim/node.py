@@ -10,7 +10,13 @@ from .keys import KeysAddress
 from .validation import validate_new_transaction
 from .utils.node import get_inputs_for
 from .utils.common import get_signature, pubkey_compressed_hash160
-from .runnable import Runnable
+from .connection import ConnectionMixin
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s: %(levelname)s:%(name)s: %(message)s",
+    datefmt="%d-%b-%y %H:%M:%S",
+)
 
 
 MIN_TXNS_PER_BLOCK = 3
@@ -21,29 +27,26 @@ MIN_TIME_SINCE_LAST_BLOCK = 30  # Seconds
 
 
 @dataclass
-class Node(Runnable):
+class Node(ConnectionMixin):
     nid: str
     peers: list[str] = field(default_factory=list)
-    propagated_txns: list[str] = field(default_factory=list)  # propagated txn ids
-    propagated_blocks: list[str] = field(default_factory=list)  # propagated block hashes
-    mem_pool: list[Transaction] = field(default_factory=list)  # Pool of unconfirmed txns
+    propagated_txns: list[str] = field(default_factory=list)
+    propagated_blocks: list[str] = field(default_factory=list)
+    mem_pool: list[Transaction] = field(default_factory=list)
     utxo_set: set[str] = field(default_factory=set)  # Set of UTXOs
-    type = "node"
+    type = "full"
 
     def __init__(self):
         super().__init__()
         self.nid = f"{self.type}-{random.randrange(10000)}"
         self.logger = logging.getLogger(self.nid)
+        self.logger.info(f"Running {self.type} node on port {self.port}")
         # Connect peers
         self.discover_peers()
 
-    def log(self, *args, **kwargs):
-        print(*args, **kwargs)
-        self.logger.info(*args, **kwargs)
-
     def on_receive_message(self, message: str):
-        msg_type, data = message.split()
-        print(f"Message type {msg_type} received with data {message}")
+        msg_type, data = message.strip().split()
+        self.logger.info(f"Message type {msg_type} received with data {data}")
 
     def discover_peers(self):
         pass
@@ -72,11 +75,11 @@ class Node(Runnable):
         try:
             txn = Transaction.deserialize(txstr)
         except Exception:
-            print(f"{self.nid} - Unparseable txn received. Ignoring.")
+            self.logger.warning(f"Unparseable txn received. Ignoring.")
             return
         is_valid = validate_new_transaction(txn)
         if not is_valid:
-            print(f"{self.nid} - Invalid txn received. Ignoring.")
+            self.logger.warning("Invalid txn received. Ignoring.")
             return
         # Add to txn pool if not already
         if txn.txid not in self.mem_pool:
@@ -96,7 +99,7 @@ class WalletNode(Node):
     def __init__(self):
         super().__init__()
         self.keysaddress = KeysAddress.new()
-        print(self.nid, self.port, self.pubkeyhash())
+        self.logger.info(f"Pubkey hash: {self.pubkeyhash()}")
 
     def pubkeyhash(self):
         return pubkey_compressed_hash160(
@@ -107,12 +110,13 @@ class WalletNode(Node):
         # TODO: I am not entirely sure what to sign. So I'll just sign
         # the serialized vout indicated by vout_ind
         vout = utxn.vout[vout_ind]
-        return get_signature(vout.serialize(), self.priv_key)
+        return get_signature(vout.serialize(), self.keysaddress.priv_key)
 
     def pay_to(self, pkeyhash: str, amt_sats: int):
-        inps = get_inputs_for(self.pub_key, amt_sats)
+        self.logger.info(f"Received payment request {amt_sats} Sats to {pkeyhash}")
+        inps = get_inputs_for(self.keysaddress.pub_key, amt_sats)
         if not inps:
-            print(f"{self.nid} - Insufficient Funds({amt_sats} sats)!")
+            self.logger.error(f"Insufficient Funds({amt_sats} sats)!")
             return
         surplus = sum([x[2] for x in inps]) - amt_sats
 
@@ -124,7 +128,7 @@ class WalletNode(Node):
                 coinbase="",
                 script_sig=" ".join([
                     self.create_signature(inp[0], inp[1]),
-                    str(self.pub_key),  # TODO: maybe hash
+                    str(self.keysaddress.pub_key),  # TODO: maybe hash
                 ]),
                 sequence=1,  # TODO: what to do here?
             )
@@ -151,11 +155,21 @@ class WalletNode(Node):
         self.socket.listen(10)   # 10 connections max
         while True:
             conn, addr = self.socket.accept()
-            self.log(f"Received connection from {addr}")
             data = conn.recv(100).decode()
-            send_addr, amount = data.strip().split()
-            self.log(f"sending {amount} to {send_addr}")
+            send_addr, amount = self.parse(data)
+            if send_addr is None or amount is None:
+                self.logger.warn("Could not parse data")
+                continue
+            self.logger.info(f"sending {amount} to {send_addr}")
             self.pay_to(send_addr, int(amount))
+            self.logger.info(f"sent {amount} to {send_addr}")
+
+    def parse(self, data):
+        try:
+            sendaddr, amt = data.strip().split()
+            return sendaddr, int(amt)
+        except Exception:
+            return None, None
 
 
 class MinerNode(Node):
