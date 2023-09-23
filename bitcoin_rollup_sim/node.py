@@ -1,7 +1,9 @@
+from typing import List
 import random
 import time
 import logging
 import threading
+from collections import defaultdict
 
 from .transaction import Transaction, VIn, VOut
 from .block import Block, get_genesis_block
@@ -32,7 +34,7 @@ class Node(ConnectionMixin):
     propagated_txns: list[str] = list()
     propagated_blocks: list[str] = list()
     mem_pool: list[Transaction] = list()
-    utxo_set: set[str] = set()
+    utxo_set: dict[str, list[VOut]] = dict()
     blocks: list[Block] = list([get_genesis_block()])
     type = "full"
 
@@ -45,18 +47,74 @@ class Node(ConnectionMixin):
         self.peers = {k: v for k, v in peers.items()}
 
     def on_receive_message(self, message: str):
-        msg_type, data = message.strip().split(" ", 1)
-        self.logger.info(f"Message type {msg_type} received with data {data[:20]}")
+        try:
+            nodeinfo, msg_type, *data = message.strip().split(" ", 2)
+            nid, nportstr = nodeinfo.split(":")
+            nport = int(nportstr)
+        except Exception:
+            self.logger.error(f"Invalid message received {message[50:]}")
+            return
+        data = "".join(data)
+
+        # Add as peer if not already
+        with threading.Lock():
+            if nid not in self.peers:
+                self.logger.info(f"node not peer {nid}:{nport}")
+                self.peers[nid] = nport
+
+        self.logger.info(f"Message type {msg_type} received with data {data[:20]}...")
         if msg_type == "newblock":
             self.process_new_block(data)
-        if msg_type == "newtxn":
+        elif msg_type == "newtxn":
             self.process_new_transaction(data)
+        elif msg_type == "pay":
+            self.process_payment(data)
+        elif msg_type == "getpeers":
+            self.send_peers(nport, data, nid)
+        elif msg_type == "peers":
+            self.process_peers(data)
 
-    def send_get_peers_msg(self):
-        ...
+    def peer_discovery(self):
+        while True:
+            for nid, nport in self.peers.items():
+                self.send_get_peers(nport, nid)
+            # Every 15 seconds
+            time.sleep(15)
 
-    def receive_get_peers_response(self):
-        ...
+    def send_peers(self, port: int, data: str, peer_id: str):
+        peersdata = " ".join([f"{k}:{v}" for k, v in self.peers.items() if k != peer_id])
+        msg = f"{self.nid}:{self.port} peers {peersdata}"
+        self.send(port, msg, peer_id)
+
+    def send_block(self, port: int, serialized_block: str, peer_id: str):
+        msg = f"{self.nid}:{self.port} newblock {serialized_block}"
+        self.send(port, msg, peer_id)
+
+    def send_transaction(self, port: int, serialized_txn: str, peer_id: str):
+        msg = f"{self.nid}:{self.port} newtxn {serialized_txn}"
+        self.send(port, msg, peer_id)
+
+    def send_get_peers(self, port: int, peer_id: str):
+        msg = f"{self.nid}:{self.port} getpeers"
+        self.send(port, msg, peer_id)
+
+    def process_peers(self, data: str):
+        try:
+            splitted = data.split()
+            for x in splitted:
+                [nid, nportstr] = x.split(":")
+                if nid not in self.peers:
+                    self.peers[nid] = int(nportstr)
+        except Exception:
+            self.logger.error("Could not parse peers response")
+
+    def process_payment(self, data: str):
+        try:
+            addr, amtstr = data.strip().split()
+            amt = int(amtstr)
+            self.pay_to(addr, amt)  # defined in wallet node
+        except Exception:
+            self.logger.error("Could not parse payment request")
 
     def propagate_block(self, block: Block):
         if block.hash in self.propagated_blocks:
@@ -83,7 +141,7 @@ class Node(ConnectionMixin):
         except Exception:
             self.logger.warning("Unparseable txn received. Ignoring.")
             return
-        is_valid = validate_new_transaction(txn)
+        is_valid = validate_new_transaction(txn, self.utxo_set)
         if not is_valid:
             self.logger.warning("Invalid txn received. Ignoring.")
             return
@@ -107,15 +165,46 @@ class Node(ConnectionMixin):
         # Add to blocks if not already
         # TODO: make this better
         hashes = [x.hash for x in self.blocks]
-        if block.hash not in hashes:
-            self.blocks.append(block)
-        self.logger.info(f"{len(self.blocks)=}")
-        self.logger.info(f"Block hashes: {', '.join([x.hash for x in self.blocks])}")
+        if block.hash in hashes:
+            return
+
+        self.blocks.append(block)
+        self.update_utxo(block)
+
+        self.logger.info(f"BLOCK HEIGHT: {len(self.blocks)}\n")
         # TODO: check for block forks
 
         # propagate valid transaction
         if block.hash not in self.propagated_blocks:
             self.propagate_block(block)
+
+    def update_utxo(self, block: Block):
+        consumed_utxos = defaultdict(list)
+        for tx in block.transactions:
+            vins = tx.vin
+            for vin in vins:
+                consumed_utxos[vin.transaction_id].append(vin.vout)
+
+        new_utxo: dict[str, List[VOut]] = {}
+        for txid, vouts in self.utxo_set.items():
+            consumed = consumed_utxos.get(txid)
+            if not consumed:
+                new_utxo[txid] = self.utxo_set[txid]
+            else:
+                consumed_inds = set(consumed)
+                new_vouts = []
+                for vout in vouts:
+                    if vout.n not in consumed_inds:
+                        new_vouts.append(vout)
+                if new_vouts:
+                    new_utxo[txid] = new_vouts
+        # new_utxo now has all the consumed vouts removed
+        # Now add the new utxos from the block
+        for tx in block.transactions:
+            new_utxo[tx.txid] = tx.vout
+
+        with threading.Lock():
+            self.utxo_set = new_utxo
 
 
 class WalletNode(Node):
@@ -127,11 +216,7 @@ class WalletNode(Node):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.keysaddress = KeysAddress.new()
-
-    def pubkeyhash(self):
-        return pubkey_compressed_hash160(
-            self.keysaddress.pub_key
-        ).hex()
+        self.logger.info(f"pkeyhash {self.keysaddress.pub_key_hash}")
 
     def create_signature(self, vout: VOut) -> str:
         # TODO: I am not entirely sure what to sign. So I'll just sign
@@ -140,17 +225,17 @@ class WalletNode(Node):
 
     def pay_to(self, pkeyhash: str, amt_sats: int):
         self.logger.info(f"Received payment request {amt_sats} Sats to {pkeyhash}")
-        inps = get_inputs_for(self.keysaddress.pub_key_hex, amt_sats)
+        inps = get_inputs_for(self.keysaddress.pub_key_hash, amt_sats, self.utxo_set)
         if not inps:
             self.logger.error(f"Insufficient Funds({amt_sats} sats)!")
             return False
-        surplus = sum([vout.value for _, _, vout in inps]) - amt_sats
+        surplus = sum([vout.value for _, vout in inps]) - amt_sats
 
         # Create txn
         vins = [
             VIn(
                 transaction_id=txid,
-                vout=vind,
+                vout=vout.n,
                 coinbase="",
                 script_sig=" ".join([
                     self.create_signature(vout),
@@ -158,17 +243,16 @@ class WalletNode(Node):
                 ]),
                 sequence=1,  # TODO: what to do here?
             )
-            for txid, vind, vout in inps
+            for txid, vout in inps
         ]
         vouts = [
-            VOut.get_for_p2pkh(pkeyhash, amt_sats),
+            VOut.get_for_p2pkh(pkeyhash, amt_sats, ind=0),
         ]
         if surplus:  # pay back to yourself
-            my_keyhash = self.pubkeyhash()
-            vouts.append(VOut.get_for_p2pkh(my_keyhash, surplus))
+            my_keyhash = self.keysaddress.pub_key_hash
+            vouts.append(VOut.get_for_p2pkh(my_keyhash, surplus, ind=1))
 
         txn = Transaction.new(vins, vouts)
-        self.logger.info(f"Created a new transaction paying {amt_sats} Satoshis to {pkeyhash}")  # noqa
 
         # Add to txn pool
         self.mem_pool.append(txn)
@@ -180,9 +264,6 @@ class WalletNode(Node):
 
 class MinerNode(WalletNode):
     type = "miner"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
     def mine(self):
         last_block = self.blocks[-1]
@@ -202,9 +283,10 @@ class MinerNode(WalletNode):
         # TODO: add fee utxos to all txns
 
         # Create a coinbase txn
+        self.logger.info(f"Creating coinbase for {self.keysaddress.pub_key_hash}")
         coinbase = Transaction.create_coinbase(
             self.keysaddress.pub_key_hash,
-            f"Minted by {self.nid}",
+            f"Minted by {self.nid} at {time.time()}",
         )
         # Create candidate block
         self.logger.info(f"Started mining block. Difficulty:{last_block.block_header.difficulty_target}")
@@ -213,7 +295,9 @@ class MinerNode(WalletNode):
             [coinbase, *txns],
             self.blocks,
         )
-        self.logger.info("Minted block. Now propagating.")
+        self.update_utxo(candidate_block)
+
+        self.logger.info("Minted block. Now propagating.\n")
 
         self.blocks.append(candidate_block)
         self.propagate_block(candidate_block)
@@ -223,7 +307,10 @@ class MinerNode(WalletNode):
             self.mem_pool = self.mem_pool[MAX_TXNS_PER_BLOCK:]
 
     def run(self):
-        # Run listener in separate thread
+        # Run peer discovery and listener in separate threads
+        peer_discovery_thread = threading.Thread(None, self.peer_discovery)
+        peer_discovery_thread.start()
+
         listener_thread = threading.Thread(None, self.listen)
         listener_thread.start()
 

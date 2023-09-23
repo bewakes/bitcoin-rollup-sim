@@ -13,7 +13,7 @@ class KeysAddress:
     address: str
 
     def __str__(self):
-        return f"Private Key: {self.priv_key:#X}\nPublic Key: {self.pub_key:#X}\nAddress: {self.address}"  # noqa
+        return f"Private Key: {self.priv_key:#X}\nPublic Key: {self.pub_key_hash}"  # noqa
 
     @classmethod
     def new(cls, compress_key=True):

@@ -14,7 +14,7 @@ from .keys import KeysAddress
 
 Random = random.Random(55)  # PRNG for creating initial coinbase p2pk address
 
-INITIAL_DIFFICULTY = 2**238
+INITIAL_DIFFICULTY = 2**237
 INITIAL_TIMESTAMP = 1694692863
 
 
@@ -164,7 +164,7 @@ pubkeyhash = pubkey_compressed_hash160(GenesisKeyAddress.pub_key).hex()
 GenesisTransactions = [
     Transaction.new(
         vin=[VIn.get_coinbase_input("Learning bitcoin", 1)],
-        vout=[VOut.get_for_p2pkh(pubkeyhash, 50)],
+        vout=[VOut.get_for_p2pkh(pubkeyhash, 50, ind=0)],
     )
 ]
 

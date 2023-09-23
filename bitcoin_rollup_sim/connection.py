@@ -51,10 +51,3 @@ class ConnectionMixin:
         s.send(f"{ln}{data}".encode())
         self.logger.info(f"Sent data to {peer_id}({port})")
 
-    def send_block(self, port: int, serialized_block: str, peer_id: str):
-        msg = "newblock " + serialized_block
-        self.send(port, msg, peer_id)
-
-    def send_transaction(self, port: int, serialized_txn: str, peer_id: str):
-        msg = "newtxn " + serialized_txn
-        self.send(port, msg, peer_id)

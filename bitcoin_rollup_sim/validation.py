@@ -1,22 +1,23 @@
-from typing import List
+from typing import List, TypeAlias
 
 from .block import Block
 from .transaction import Transaction, VIn, VOut
-from .global_state import GLOBAL_STATE
 from .script import run_stack
 
+TxId: TypeAlias = str
 
-def validate_new_transaction(txn: Transaction):
-    utxos_map: dict[str, List[VOut]] = dict(GLOBAL_STATE.get_utxos())
-    utxos = [utxos_map.get(x.transaction_id) for x in txn.vin]
-    if not all(utxos):
+
+def validate_new_transaction(txn: Transaction, utxos: dict[TxId, List[VOut]]):
+    # check if input txns are in utxo set
+    utx_vouts = [utxos.get(x.transaction_id) for x in txn.vin]
+    if not all(utx_vouts):
         return False
 
-    for vin, utx in zip(txn.vin, utxos):
+    for vin, utx_vouts in zip(txn.vin, utx_vouts):
         # Run the script
-        if utx is None:
+        if not utx_vouts:
             return False
-        if not validate_scripts(vin, utx):
+        if not validate_scripts(vin, utx_vouts):
             return False
     return True
 
@@ -27,9 +28,14 @@ def validate_new_block(block: Block):
 
 def validate_scripts(vin: VIn, vouts: List[VOut]):
     # TODO: use witness
-    vout = vouts[vin.vout]
+    filtered_vouts = [x for x in vouts if x.n == vin.vout]
+    if not filtered_vouts:
+        return False
+    vout = filtered_vouts[0]
+
     locking_script = vout.script_pub_key.split()
     unlocking_script = vin.script_sig.split()
+
     # TODO: validate scripts in stack separately
     combined = [*unlocking_script, *locking_script]
     result = run_stack(combined, vout)

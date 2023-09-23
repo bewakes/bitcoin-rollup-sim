@@ -50,11 +50,12 @@ class VIn:
 
 @dataclass
 class VOut:
+    n: int
     value: int  # Satoshis, 8 bytes original, little endian
     script_pub_key: str
 
     @classmethod
-    def get_for_p2pkh(cls, pkeyhash: str, value: int):
+    def get_for_p2pkh(cls, pkeyhash: str, value: int, ind: int):
         locking_script = " ".join(
             [
                 ScriptOps.OP_DUP,
@@ -65,6 +66,7 @@ class VOut:
             ]
         )
         return cls(
+            n=ind,
             value=value,
             script_pub_key=locking_script,
         )
@@ -72,6 +74,7 @@ class VOut:
     def serialize(self):
         return json.dumps(
             [
+                self.n,
                 self.value,
                 self.script_pub_key,
             ]
@@ -81,8 +84,9 @@ class VOut:
     def deserialize(cls, data: str):
         listed = json.loads(data)
         return cls(
-            value=int(listed[0]),
-            script_pub_key=listed[1],
+            n=int(listed[0]),
+            value=int(listed[1]),
+            script_pub_key=listed[2],
         )
 
 
@@ -96,9 +100,10 @@ class Transaction:
 
     @classmethod
     def create_coinbase(cls, dest_pubkeyhash: str, coinbase_message: str):
+        coinbase_value = 50 * 10**8  # in satoshis
         return cls.new(
             vin=[VIn.get_coinbase_input(coinbase_message, 1)],
-            vout=[VOut.get_for_p2pkh(dest_pubkeyhash, 50)],
+            vout=[VOut.get_for_p2pkh(dest_pubkeyhash, coinbase_value, ind=0)],
         )
 
     @classmethod
