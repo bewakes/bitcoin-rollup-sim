@@ -1,4 +1,5 @@
 from typing import List
+import json
 import random
 import time
 import logging
@@ -9,8 +10,8 @@ from .transaction import Transaction, VIn, VOut
 from .block import Block, get_genesis_block
 from .keys import KeysAddress
 from .validation import validate_new_transaction, validate_new_block
-from .utils.node import get_inputs_for
-from .utils.common import get_signature, pubkey_compressed_hash160
+from .utils.node import get_inputs_for, get_balance_for
+from .utils.common import get_signature
 from .connection import ConnectionMixin
 
 MIN_TXNS_PER_BLOCK = 3
@@ -21,7 +22,7 @@ MIN_TIME_SINCE_LAST_BLOCK = 30  # Seconds
 
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s: %(levelname)s:%(name)s: %(message)s",
     datefmt="%d-%b-%y %H:%M:%S",
 )
@@ -42,11 +43,11 @@ class Node(ConnectionMixin):
         super().__init__()
         self.nid = f"{self.type}-{random.randrange(10000)}"
         self.logger = logging.getLogger(self.nid)
-        self.logger.info(f"Running {self.type} node on port {self.port}")
+        self.logger.warning(f"Running {self.type} node on port {self.port}")
 
         self.peers = {k: v for k, v in peers.items()}
 
-    def on_receive_message(self, message: str):
+    def on_receive_message(self, message: str, conn):
         try:
             nodeinfo, msg_type, *data = message.strip().split(" ", 2)
             nid, nportstr = nodeinfo.split(":")
@@ -71,15 +72,38 @@ class Node(ConnectionMixin):
             self.process_payment(data)
         elif msg_type == "getpeers":
             self.send_peers(nport, data, nid)
+        elif msg_type == "app:getblocks":
+            self.send_blocks_to_app(conn)
+        elif msg_type == "app:getbalance":
+            self.send_balance_to_app(conn)
         elif msg_type == "peers":
             self.process_peers(data)
 
     def peer_discovery(self):
-        while True:
-            for nid, nport in self.peers.items():
-                self.send_get_peers(nport, nid)
-            # Every 15 seconds
-            time.sleep(15)
+        with threading.Lock():
+            while True:
+                for nid, nport in self.peers.items():
+                    self.send_get_peers(nport, nid)
+                # Every 15 seconds
+                time.sleep(15)
+
+    def send_blocks_to_app(self, conn):
+        blocks = [x.serialize() for x in self.blocks]
+        msg = json.dumps(blocks)
+        ln = len(msg)
+        data = f"{ln}{msg}"
+        conn.send(data.encode())
+        conn.close()
+
+    def send_balance_to_app(self, conn):
+        # Prepend space in the beginning, due to a bug:
+        # The recv_from.. function first reads the size and then receives size amt of data
+        # if size and balance value are appended, it will cause error
+        msg = f" {self.get_balance()}"
+        ln = len(msg)
+        data = f"{ln}{msg}"
+        conn.send(data.encode())
+        conn.close()
 
     def send_peers(self, port: int, data: str, peer_id: str):
         peersdata = " ".join([f"{k}:{v}" for k, v in self.peers.items() if k != peer_id])
@@ -206,6 +230,9 @@ class Node(ConnectionMixin):
         with threading.Lock():
             self.utxo_set = new_utxo
 
+    def get_balance(self, *args, **kwargs):
+        return 0
+
 
 class WalletNode(Node):
     """
@@ -216,12 +243,19 @@ class WalletNode(Node):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.keysaddress = KeysAddress.new()
-        self.logger.info(f"pkeyhash {self.keysaddress.pub_key_hash}")
+        self.logger.warning(f"pkeyhash {self.keysaddress.pub_key_hash}")
+
+    @property
+    def pubkeyhash(self):
+        return self.keysaddress.pub_key_hash
 
     def create_signature(self, vout: VOut) -> str:
         # TODO: I am not entirely sure what to sign. So I'll just sign
         # the serialized vout indicated by vout_ind
         return get_signature(vout.serialize(), self.keysaddress.priv_key)
+
+    def get_balance(self):
+        return get_balance_for(self.keysaddress.pub_key_hash, self.utxo_set)
 
     def pay_to(self, pkeyhash: str, amt_sats: int):
         self.logger.info(f"Received payment request {amt_sats} Sats to {pkeyhash}")
@@ -297,7 +331,7 @@ class MinerNode(WalletNode):
         )
         self.update_utxo(candidate_block)
 
-        self.logger.info("Minted block. Now propagating.\n")
+        self.logger.warning("Minted block. Now propagating.\n")
 
         self.blocks.append(candidate_block)
         self.propagate_block(candidate_block)

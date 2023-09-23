@@ -50,3 +50,22 @@ def pubkey_compressed_to_point(pubkey_compressed: int):
     else:
         Y = yodd
     return point.Point(X, Y, curve.secp256k1)
+
+
+def recv_from_sock(conn):
+    """
+    NOTE: this functions waits indefinitely if the data sent is all numbers
+    So if you need to send data, make sure the data starts with non number
+    """
+    ln = ""
+    data = ""
+    while True:
+        d = conn.recv(1).decode()
+        if d in "1234567890":
+            ln += d
+        else:
+            data += d
+            break
+    size = int(ln)
+    data += conn.recv(size).decode()
+    return data

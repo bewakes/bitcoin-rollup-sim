@@ -36,6 +36,15 @@ class VIn:
         ]
         return json.dumps(listed)
 
+    def to_json(self):
+        return {
+            "txn_id": self.transaction_id,
+            "vout": self.vout,
+            "script_sig": self.script_sig,
+            "sequence": self.sequence,
+            "coinbase": self.coinbase,
+        }
+
     @classmethod
     def deserialize(cls, data: str):
         listed = json.loads(data)
@@ -79,6 +88,13 @@ class VOut:
                 self.script_pub_key,
             ]
         )
+
+    def to_json(self):
+        return {
+            "n": self.n,
+            "value": self.value,
+            "script_pub_key": self.script_pub_key,
+        }
 
     @classmethod
     def deserialize(cls, data: str):
@@ -130,6 +146,15 @@ class Transaction:
                 [x.serialize() for x in self.vout],
             ]
         )
+
+    def to_json(self):
+        return {
+            "txid": self.txid,
+            "version": self.version,
+            "locktime": self.locktime,
+            "vins": [x.to_json() for x in self.vin],
+            "vouts": [x.to_json() for x in self.vout],
+        }
 
     @classmethod
     def deserialize(cls, data: str):

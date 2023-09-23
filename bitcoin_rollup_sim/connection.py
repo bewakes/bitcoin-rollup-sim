@@ -1,6 +1,8 @@
 import random
 import socket
 
+from .utils.common import recv_from_sock
+
 
 # How many bytes to represent the size(stringified int) of the data
 DATA_LEN_NUM_BYTES = 5
@@ -25,7 +27,7 @@ class ConnectionMixin:
             except Exception:
                 print(f"Binding to {port} failed. Trying another.")
 
-    def on_receive_message(self, _: str):
+    def on_receive_message(self, _: str, __):
         pass
 
     def run(self):
@@ -37,9 +39,8 @@ class ConnectionMixin:
             conn, addr = self.socket.accept()
             # Read size of data in bytes
             # first N bytes denote stringified number of bytes
-            size = int(conn.recv(DATA_LEN_NUM_BYTES))
-            data = conn.recv(size).decode()
-            resp = self.on_receive_message(data)
+            data = recv_from_sock(conn)
+            resp = self.on_receive_message(data, conn)
             if resp is not None:
                 ln = str(len(resp)).zfill(DATA_LEN_NUM_BYTES)
                 conn.send(f"{ln}{resp}".encode())
@@ -50,4 +51,3 @@ class ConnectionMixin:
         ln = str(len(data)).zfill(DATA_LEN_NUM_BYTES)
         s.send(f"{ln}{data}".encode())
         self.logger.info(f"Sent data to {peer_id}({port})")
-

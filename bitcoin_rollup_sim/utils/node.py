@@ -41,3 +41,20 @@ def get_inputs_for(
     # If it reaches here, then the amount cannot be satisfied from pubkey
     # spendable utxos
     return []
+
+
+def get_balance_for(
+    pub_key_hash: str,
+    utxos: dict[str, list[VOut]],
+) -> int:
+    """
+    This scans unspent txns that can be spent by pub_key
+    """
+    sum_amt = 0
+    for txid, vouts in utxos.items():
+        # Check vout for each
+        vout = check_can_spend(vouts, pub_key_hash)
+        if vout is not None:
+            val = vout.value
+            sum_amt += val
+    return sum_amt

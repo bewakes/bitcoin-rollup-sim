@@ -48,6 +48,16 @@ class BlockHeader:
             self.nonce,
         ])
 
+    def to_json(self):
+        return {
+            "version": self.version,
+            "prev_block_hash": self.prev_block_hash,
+            "merkle_root": self.merkle_root,
+            "timestamp": self.timestamp,
+            "difficulty": self.difficulty_target,
+            "nonce": self.nonce,
+        }
+
     @classmethod
     def deserialize(cls, data: str):
         [v, p, m, t, d, n] = json.loads(data)
@@ -79,6 +89,14 @@ class Block:
             [x.serialize() for x in self.transactions],
             self.block_size,
         ])
+
+    def to_json(self):
+        return {
+            "header": self.block_header.to_json(),
+            "num_txns": self.num_transactions,
+            "txns": [x.to_json() for x in self.transactions],
+            "block_size": self.block_size,
+        }
 
     @classmethod
     def deserialize(cls, data: str):
