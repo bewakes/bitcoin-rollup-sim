@@ -41,7 +41,7 @@ class Node(ConnectionMixin):
 
     def __init__(self, peers):
         super().__init__()
-        self.nid = f"{self.type}-{random.randrange(10000)}"
+        self.nid = f"{self.type}-{random.randrange(100)}"
         self.logger = logging.getLogger(self.nid)
         self.logger.warning(f"Running {self.type} node on port {self.port}")
 
@@ -136,6 +136,7 @@ class Node(ConnectionMixin):
         try:
             addr, amtstr = data.strip().split()
             amt = int(amtstr)
+            print(f"paying {amt} to {addr}")
             self.pay_to(addr, amt)  # defined in wallet node
         except Exception:
             self.logger.error("Could not parse payment request")
@@ -171,8 +172,9 @@ class Node(ConnectionMixin):
             return
         # Add to txn pool if not already
         mempool_ids = [x.txid for x in self.mem_pool]
-        if txn.txid not in mempool_ids:
-            self.mem_pool.append(txn)
+        with threading.Lock():
+            if txn.txid not in mempool_ids:
+                self.mem_pool.append(txn)
 
         self.propagate_transaction(txn)
 
@@ -192,7 +194,9 @@ class Node(ConnectionMixin):
         if block.hash in hashes:
             return
 
-        self.blocks.append(block)
+        with threading.Lock():
+            self.blocks.append(block)
+
         self.update_utxo(block)
 
         self.logger.info(f"BLOCK HEIGHT: {len(self.blocks)}\n")
@@ -312,6 +316,7 @@ class MinerNode(WalletNode):
         ):
             return
 
+        self.logger.warning(f"TXNS IN MEMPOOL {len(self.mem_pool)}")
         # TODO: sort by fees
         txns = self.mem_pool[:MAX_TXNS_PER_BLOCK]
         # TODO: add fee utxos to all txns
@@ -321,6 +326,7 @@ class MinerNode(WalletNode):
         coinbase = Transaction.create_coinbase(
             self.keysaddress.pub_key_hash,
             f"Minted by {self.nid} at {time.time()}",
+            len(self.blocks),
         )
         # Create candidate block
         self.logger.info(f"Started mining block. Difficulty:{last_block.block_header.difficulty_target}")
@@ -329,6 +335,8 @@ class MinerNode(WalletNode):
             [coinbase, *txns],
             self.blocks,
         )
+        for tx in txns:
+            self.logger.warn(f"vout: {tx.vout[0].script_pub_key}")
         self.update_utxo(candidate_block)
 
         self.logger.warning("Minted block. Now propagating.\n")

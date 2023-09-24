@@ -4,7 +4,8 @@ import hashlib
 from dataclasses import dataclass
 
 from .consts import ScriptOps
-from .utils.common import pubkey_compressed_hash160
+
+REWARD_HALF_BLOCKS = 5
 
 
 @dataclass
@@ -115,8 +116,9 @@ class Transaction:
     txid: str = ""
 
     @classmethod
-    def create_coinbase(cls, dest_pubkeyhash: str, coinbase_message: str):
-        coinbase_value = 50 * 10**8  # in satoshis
+    def create_coinbase(cls, dest_pubkeyhash: str, coinbase_message: str, blockheight: int):
+        # Block reward halves every 20 blocks
+        coinbase_value = (50 * 10**8) / (2 **(blockheight // REWARD_HALF_BLOCKS))  # in satoshis
         return cls.new(
             vin=[VIn.get_coinbase_input(coinbase_message, 1)],
             vout=[VOut.get_for_p2pkh(dest_pubkeyhash, coinbase_value, ind=0)],

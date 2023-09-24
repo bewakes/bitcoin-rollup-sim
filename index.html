@@ -1,0 +1,284 @@
+<html>
+    <head>
+        <title>Bitcoin-Rollup Simulation</title>
+        <style>
+            body {
+                padding: 0;
+                margin: 0;
+                color: #ddd;
+                background: #222;
+                font-family: Courier New;
+            }
+            pre {
+                font-family: Courier New;
+            }
+            .title {
+                font-weight: bold;
+                font-size: 20px;
+            }
+            #main {
+                display: flex;
+                flex-direction: column;
+            }
+            #nodes-logs-pane {
+                display: flex;
+                flex-direction: row;
+                max-height: 75vh;
+                min-height: 75vh;
+                width: 100%
+            }
+            #nodes-info {
+                width: 70%;
+                padding: 10px;;
+                display: flex;
+                max-height: 85vh;
+                flex-direction: column;
+                border: solid 1px gray;
+            }
+            #nodes {
+                display: flex;
+                width: 100%;
+                flex-direction: row;
+                flex-wrap: wrap;
+                height: 60vh;
+                flex-grow: 0;
+                overflow-y: scroll;
+            }
+            #blocksinfo {
+                height: 25vh;
+            }
+            #logs-pane {
+                width: 30%;
+                padding: 1rem;
+                display: flex;
+                border: solid 1px gray;
+            }
+            #command-pane {
+                height: 22vh;
+                padding: 5px;
+                display: flex;
+                flex-direction: column;
+                border: solid 1px gray;
+            }
+            .object {
+                display: flex;
+                flex-direction: column;
+                border-radius: 5px;
+                padding: 10px;
+                margin: 5px;
+                align-self: start;
+                border: solid 1px gray;
+            }
+            .object-attr {
+                margin-bottom: 1px;
+                display: flex;
+                flex-direction: row;
+            }
+            .attr-name {
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            #command-container {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+            }
+            #command-prompt {
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            #command_input {
+                background-color: transparent;
+                border: none;
+                padding: 8px;
+                width: 100%;
+                font-weight: bold;
+                color: #bbb;
+                caret-shape: block;
+                font-family: courier new;
+            }
+            #command_input:focus {
+                background-color: transparent;
+                outline: solid 0px black;
+                color: #bbb;
+                padding: 8px;
+                font-family: courier new;
+            }
+            #command-output {
+                height: 14vh;
+                overflow-y: scroll;
+                color: #999;
+            }
+            form {
+                margin: 0;
+            }
+            </style>
+        </head>
+
+        <body>
+        <div id="main">
+            <div id="nodes-logs-pane">
+                <div id="nodes-info">
+                    <div class="title">
+                        <b>Nodes</b>
+                    </div>
+                    <div id="nodes">
+                    </div>
+                    <div id="blocksinfo-container">
+                        <div class="title">
+                            BlockInfo
+                        </div>
+                        <div id="blocksinfo">
+                        </div>
+                    </div>
+                </div>
+                <div id="logs-pane">
+                    <div class="title">
+                        <b>Logs</b>
+                    </div>
+                </div>
+            </div>
+            <div id="command-pane">
+                <div class="title">
+                    <b>Command</b>
+                </div>
+                <div id="command-container">
+                    <div style="display:flex; flex-direction: row; border-bottom: solid 0.5px #aaa">
+                        <div id="command-prompt">
+                            &gt;
+                        </div>
+                        <form style="width: 100%" action="javascript:parseAndSendCommand(command_input.value)">
+                            <input name="command" type=text id="command_input" placeholder="" autofocus>
+                        </form>
+                    </div>
+                    <div id="command-output">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    <script>
+        var nodesContainer = document.getElementById("nodes");
+        var blocksInfoContainer = document.getElementById("blocksinfo");
+        var outputContainer = document.getElementById("command-output");
+        var inputContainer = document.getElementById("command_input");
+        var commandPane = document.getElementById("command-pane");
+
+        commandPane.addEventListener("click", () => {
+            inputContainer.focus();
+        });
+
+        function renderObjects(objs, container, ignoreKeys=[]) {
+            var html = '';
+            objs.forEach(obj => {
+                html += renderObject(obj, ignoreKeys);
+            });
+            container.innerHTML = html;
+        }
+        function renderObject(obj, ignoreKeys=[]) {
+            var html = `<div class="object">`;
+            Object.entries(obj).forEach(([k, v]) => {
+                if (ignoreKeys.indexOf(k) >= 0) return;
+                html += '<div class="object-attr">';
+                html += '   <div class="attr-name">';
+                html += k;
+                html += '   </div>';
+                html += '   <div class="attr-val">';
+                html += v;
+                html += '   </div>';
+                html += '</div>';
+            });
+            html += "</div>";
+            return html;
+        }
+
+        var objects = [
+            {a: 1, b: 2, c: 3},
+            {a: 1, b: 2, c: 3},
+            {name: "bibek", age: 28},
+            {name: "bibek", age: 28},
+            {name: "bibek", age: 28},
+        ];
+
+        async function getInfo() {
+            var resp = await fetch("/info");
+            var data = await resp.json();
+            renderObjects([data], blocksInfoContainer);
+        }
+
+        async function getPeers() {
+            var resp = await fetch("/peers");
+            var data = await resp.json();
+            renderObjects(data, nodesContainer, ["pubkey", "pubkey_hash"]);
+        }
+
+        function parseCommand(cmd) {
+            var [action, ...data] = cmd.trim().split(" ");
+            if (action == "pay") {
+                if (data.length != 3) {
+                    setOutput("Invalid pay command. Usage: pay <from_id> <to_id> <amount_satoshis>", true);
+                    return undefined;
+                }
+                return [
+                    action,
+                    {
+                        from_id: data[0],
+                        to_id: data[1],
+                        amount: parseInt(data[2]),
+                    }
+                ];
+            }
+            else if (action == "nodeinfo") {
+                if (data.length != 1) {
+                    setOutput("Invalid nodeinfo command. Usage: peerinfo <nodeid>", true);
+                    return
+                }
+                return [action, {"node_id": data[0]}];
+            }
+            setOutput("Command does not exist", true);
+        }
+
+        function setOutput(txt, error=false) {
+            var html = "<div " + (error ? "style=\"color: orange\" >" : ">");
+            html += txt;
+            html += "</div>";
+            outputContainer.innerHTML = html;
+        }
+
+        async function parseAndSendCommand(inp) {
+            setOutput("");
+            var result = parseCommand(inp);
+            if (result == undefined) return;
+            var [action, data] = result;
+            var resp = await fetch("/"+action, {
+                method: "POST", body: JSON.stringify(data),
+                headers: { "Content-Type": "application/json" },
+            });
+            var respdata = await resp.json();
+            if (!respdata.success) {
+                setOutput(respdata.error || "Error", true);
+            }
+            else {
+                if (!respdata.message) {
+                    setOutput("Success");
+                }
+                else if (typeof respdata.message == "string") {
+                    setOutput(respdata.message || "Success");
+                } else {
+                    setOutput("<pre>"+JSON.stringify(respdata.message, null, 2)+"</pre>");
+                }
+            }
+        }
+
+        function PollAPI(fn, nsec) {
+            async function f() {
+                await fn();
+                setTimeout(f, nsec);
+            }
+            f();
+        }
+        PollAPI(getInfo, 5000);
+        PollAPI(getPeers, 5000);
+    </script>
+
+</html>
